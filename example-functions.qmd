@@ -1,0 +1,173 @@
+---
+title: "Example functions"
+code-link: true
+---
+
+This document reviews the three types of functions you can write in R and illustrates a few of the basic options for [HTML documents](https://quarto.org/docs/output-formats/html-basics.html) and [websites](https://quarto.org/docs/websites/) in Quarto.
+
+This document is a resource to support the completion of exercise 7. For more background on functions, please review the Functions chapter in [R for Data Science](https://r4ds.hadley.nz/functions).
+
+## Getting started
+
+First, we need to load the `{tidyverse}` and `{sf}` packages:
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(sf)
+```
+
+Take a look at the source for document and you can see how the code block above includes a label by including the line `#| label:` followed by the label `setup`. This is an example of a [chunk option](https://quarto.org/docs/computations/r.html#chunk-options) that allow you to override the [execution options](https://quarto.org/docs/computations/execution-options.html) set in the frontmatter (also known as the YAML) at the top of this page.
+
+Execution options for the broader Quarto website project are controlled by the `_quarto.yml` file you can find in the same directory as `examples.qmd`. Take a look at [the Quarto guide](https://quarto.org/docs/guide/) to learn more about how to change the options in `_quarto.yml` to [customize your website](https://quarto.org/docs/websites/#config-file) or [about project metadata](https://quarto.org/docs/projects/quarto-projects.html#project-metadata). 
+
+This example uses functions in the `R/example-functions.R` script contained in this project. We could use `source()` to read the script but I am going to use a function called `knitr::read_chunk()` so I can also show each part of the code in this document as we review.
+
+```{r}
+knitr::read_chunk(here::here("R", "example-functions.R"), roxygen_comments = FALSE)
+```
+
+Finally, to illustrate the different types of functions, we need some data. We can use `st_read()` to create a new `sf` data frame called `nc` from the `nc.shp` shapefile that is included with the `{sf}` package:
+
+```{r}
+nc <- st_read(system.file("shape/nc.shp", package = "sf"))
+```
+
+## Control flow
+
+Our first example function is `return_one_of_two()`:
+
+```{r}
+#| label: return_one_of_two
+```
+
+By default, the function returns the first input argument, which is a subset of `nc` with just Ashe County:
+
+```{r}
+return_one_of_two(
+  x = nc[1, ],
+  y = nc[2, ]
+)
+```
+By setting the `return_x` argument to `FALSE` we can return the second input argument instead:
+
+```{r}
+return_one_of_two(
+  x = nc[1, ],
+  y = nc[2, ],
+  return_x = FALSE
+)
+```
+With the added argument to override the default value, `return_one_of_two()` now returns Alleghany County.
+
+## Vector functions
+
+Next, we can review two example functions that are similar to the functions we wrote during our class session.
+
+First is `area_acres()`:
+
+```{r}
+#| label: area_acres
+```
+
+This function takes a `sfc` list as the input and returns an equal length `units` vector as the output:
+
+```{r}
+area_acres(nc$geometry)
+```
+
+Remember, that we also call this type of function a "mutate" function because you can use it inside of a `mutate()` call:
+
+```{r}
+nc |>
+  mutate(
+    area_acres = area_acres(geometry)
+  )
+```
+
+Compare `area_acres()` with `mean_area()` and you will find two important changes in the code:
+
+```{r}
+#| label: mean_area
+```
+
+First, `mean_area()` is a summary function that we can use with a vector or inside of a `summarise()` function:
+
+```{r}
+nc |>
+  summarise(
+    mean_sq_mi = mean_area(geometry, value = "mile^2")
+  )
+```
+
+We also added the `value` parameter which is passed to `units::set_units()` and allows us to change the units returned by the function. Exposing parameters from the underlying functions can provide you with greater flexibility when you reuse the function in the future.
+
+## Data frame functions
+
+Many of the functions from `{dplyr}` that we have discussed in class (including `select()`, `mutate()`, and `filter()`) are data frame functions that take a data frame and return a data frame.
+
+`select_starts_with()` wraps the `dplyr::select()` function:
+
+```{r}
+#| label: select_starts_with
+```
+
+Here are the results: 
+
+```{r}
+select_starts_with(nc, c("NAME", "BIR"))
+```
+
+Data frame functions may just be a wrapper for a vector function. For example, take a look at `bind_sf_area_acres()` which combines `mutate()` and the `area_acres()` function we looked at in the prior section:
+
+```{r}
+#| label: bind_sf_area_acres
+```
+
+Note that this function uses an input check, `stopifnot()`, to make sure the input data is a `sf` class object.
+
+Here is the function in action:
+
+```{r}
+nc |>
+  select_starts_with("NAME") |>
+  bind_sf_area_acres()
+```
+
+## Plot functions
+
+The last example is a plotting function that wraps both `ggplot()` and `geom_sf()`.
+
+Here is the code:
+
+```{r}
+#| label: make_sf_plot
+```
+
+Here are the results:
+
+```{r}
+make_sf_plot(
+  data = nc,
+  mapping = aes(fill = BIR74),
+  color = "white",
+  linewidth = 0.1
+)
+```
+
+This function uses a special operator `...` (called dots) that can *only* be used inside a function. Dots are a way to pass any number of additional arguments from one function to another. Read more about the `...` parameters in the Advanced R [chapter on functions](https://adv-r.hadley.nz/functions.html#fun-dot-dot-dot).
+
+In this example, `data` and `mapping` are passed to `ggplot()` and any additional parameters are passed to `geom_sf()`.
+
+Plotting functions are helpful avoid duplication in your mapping code. Since they return a `ggplot` object, you can customize the results by combining it with other functions:
+
+```{r}
+make_sf_plot(
+  data = nc,
+  mapping = aes(fill = BIR74),
+  color = "white",
+  linewidth = 0.1
+) +
+  theme_minimal() +
+  ggtitle("Births by county, 1974-78")
+```
