@@ -19,5 +19,6 @@ editor: visual
 
 execute:
   freeze: auto
+  error: true
 
 
